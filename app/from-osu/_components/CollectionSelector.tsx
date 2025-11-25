@@ -24,7 +24,7 @@ export default function CollectionSelector({
     <div className="mb-4 px-4">
       <div className="flex items-center gap-2 mb-2">
         <h4 className="text-white text-sm font-semibold">
-          📚 Filter by Collection
+          Filter by Collection
         </h4>
         <span className="text-white/40 text-xs">
           ({collections.length} collections)
@@ -43,9 +43,9 @@ export default function CollectionSelector({
           All Songs ({totalSongs})
         </button>
         
-        {collections.map((collection) => (
+        {collections.map((collection, idx) => (
           <button
-            key={collection.name}
+            key={`${collection.name}-${idx}`}
             onClick={() => {
               onSelect(collection)
 
@@ -59,7 +59,12 @@ export default function CollectionSelector({
                   title_unicode: bm.title_unicode || null,
                   text: `${bm.artist_unicode || bm.artist || ''} - ${bm.title_unicode || bm.title || ''}`,
                   image: '',
-                  id: String(bm.beatmapset_id || ''),
+                  // prefer a positive beatmapset_id, fall back to beatmap_id
+                  id: bm.beatmapset_id && bm.beatmapset_id > 0
+                     ? String(bm.beatmapset_id)
+                     : bm.beatmap_id && bm.beatmap_id > 0
+                        ? String(bm.beatmap_id)
+                        : '',
                 }))
 
                 setSongs(songsFromCollection)
@@ -71,7 +76,7 @@ export default function CollectionSelector({
                 : 'bg-main-dark border-main-border/50 text-white/60 hover:text-white hover:border-main-border/80'
             }`}
           >
-            📁 {collection.name} ({collection.beatmaps.length})
+             {collection.name} ({collection.beatmaps.length})
           </button>
         ))}
       </div>

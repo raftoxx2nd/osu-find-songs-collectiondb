@@ -1,6 +1,7 @@
 'use client'
 import { Song } from '@/types/types'
 import { createContext, useContext, useMemo, useState } from 'react'
+import { useEffect } from 'react'
 import { CollectionData } from '@/types/collection'
 
 type SongsContextType = {
@@ -18,6 +19,15 @@ export function SongContextProvider({ children }: { children: React.ReactNode })
 
    // Stabilize the provider value so consumers don't receive a new object ref every render
    const value = useMemo(() => ({ songs, setSongs, collections, setCollections }), [songs, collections])
+
+   // Debug: log changes so UI interaction is easier to trace during development
+   useEffect(() => {
+      console.debug('SongContext: songs changed —', songs.length)
+   }, [songs])
+
+   useEffect(() => {
+      console.debug('SongContext: collections changed —', collections?.collections?.length ?? 0)
+   }, [collections])
 
    return <SongsContext.Provider value={value}>{children}</SongsContext.Provider>
 }

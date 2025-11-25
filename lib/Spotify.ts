@@ -55,20 +55,56 @@ export const searchSongWithConditions = async (song: Song): Promise<[TrackFull] 
       if (!conditionSearch) continue
       else modifiedSong = conditionSearch
 
-      // prefer unicode fields when available (author_unicode / title_unicode)
-      const artistQuery = (modifiedSong as any).author_unicode || modifiedSong.author
-      const titleQuery = (modifiedSong as any).title_unicode || modifiedSong.title
-      const result = await findSong(`artist:${artistQuery} track:${titleQuery}`)
-      if (result.tracks.items.length) return result.tracks.items
+      // Build candidate query variants: prefer unicode fields but try non-unicode fallback
+      const artistUni = (modifiedSong as any).author_unicode ? String((modifiedSong as any).author_unicode).trim() : ''
+      const titleUni = (modifiedSong as any).title_unicode ? String((modifiedSong as any).title_unicode).trim() : ''
+      const artistNorm = modifiedSong.author ? String(modifiedSong.author).trim() : ''
+      const titleNorm = modifiedSong.title ? String(modifiedSong.title).trim() : ''
+
+      // Candidate order: unicode (both present) -> unicode artist + non-unicode title -> non-unicode artist + unicode title -> non-unicode
+      const candidates: Array<{ artist: string; title: string; label?: string }> = []
+      if (artistUni && titleUni) candidates.push({ artist: artistUni, title: titleUni, label: 'unicode/unicode' })
+      if (artistUni && titleNorm && (!artistUni || artistUni !== titleNorm)) candidates.push({ artist: artistUni, title: titleNorm, label: 'unicode/normal-title' })
+      if (artistNorm && titleUni && (!titleUni || titleUni !== artistNorm)) candidates.push({ artist: artistNorm, title: titleUni, label: 'normal/unicode-title' })
+      if (artistNorm && titleNorm) candidates.push({ artist: artistNorm, title: titleNorm, label: 'normal/normal' })
+
+      for (const c of candidates) {
+         try {
+            const q = `artist:${c.artist} track:${c.title}`
+            // debug in dev — helps to see which candidate matched in practice
+            if (process.env.NODE_ENV !== 'production') console.debug('Spotify search candidate:', c.label, q)
+            const result = await findSong(q)
+            if (result.tracks.items.length) return result.tracks.items
+         } catch (err) {
+            console.warn('Failed spotify search for candidate', c, err)
+         }
+      }
    }
 
    for (const condition of hardConditions) {
       const hardSearch = condition(modifiedSong)
 
-      const hardArtist = (hardSearch as any).author_unicode || hardSearch.author
-      const hardTitle = (hardSearch as any).title_unicode || hardSearch.title
-      const result = await findSong(`${hardArtist} - ${hardTitle}`)
-      if (result.tracks.items.length) return result.tracks.items
+      // Test a few hard query variants too (try unicode and non-unicode combinations)
+      const ha = (hardSearch as any).author_unicode || hardSearch.author || ''
+      const ht = (hardSearch as any).title_unicode || hardSearch.title || ''
+      const hb = hardSearch.author || ''
+      const htNorm = hardSearch.title || ''
+      const hardCandidates = [
+         `${ha} - ${ht}`,
+         `${ha} - ${htNorm}`,
+         `${hb} - ${ht}`,
+         `${hb} - ${htNorm}`,
+      ]
+
+      for (const q of hardCandidates) {
+         try {
+            if (process.env.NODE_ENV !== 'production') console.debug('Spotify HARD search candidate:', q)
+            const result = await findSong(q)
+            if (result.tracks.items.length) return result.tracks.items
+         } catch (err) {
+            console.warn('Failed spotify HARD search for candidate', q, err)
+         }
+      }
       console.warn(`Song not found after HARD: ${hardSearch.author} - ${hardSearch.title}`)
    }
    return null

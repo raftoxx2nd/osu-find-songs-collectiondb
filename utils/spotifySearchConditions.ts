@@ -1,31 +1,78 @@
 import { Song } from '@/types/types'
 
 export const conditions = [
-   (s: Song) => s,
+   // identity — return same song (applies normalization in applyAlwaysConditions already)
+   (s: Song) => ({ ...s, title_unicode: s.title_unicode ?? null, author_unicode: s.author_unicode ?? null }),
+
+   // strip parentheses from titles (both title and title_unicode when present)
    (s: Song) => {
-      if (s.title.includes('(') && s.title.includes(')')) return { ...s, title: s.title.replace(/\s*\(.*?\)\s*/g, '') }
-      else return null
+      const hasParen = (s.title && s.title.includes('(') && s.title.includes(')'))
+      const hasParenUni = !!s.title_unicode && String(s.title_unicode).includes('(') && String(s.title_unicode).includes(')')
+      if (!hasParen && !hasParenUni) return null
+      return {
+         ...s,
+         title: hasParen ? s.title.replace(/\s*\(.*?\)\s*/g, '').trim() : s.title,
+         title_unicode: hasParenUni ? String(s.title_unicode).replace(/\s*\(.*?\)\s*/g, '').trim() : s.title_unicode ?? null,
+         author_unicode: s.author_unicode ?? null,
+      }
    },
+
+   // strip square brackets from titles
    (s: Song) => {
-      if (s.title.includes('[') && s.title.includes(']')) return { ...s, title: s.title.replace(/\s*\[.*?\]\s*/g, '') }
-      else return null
+      const hasBr = (s.title && s.title.includes('[') && s.title.includes(']'))
+      const hasBrUni = !!s.title_unicode && String(s.title_unicode).includes('[') && String(s.title_unicode).includes(']')
+      if (!hasBr && !hasBrUni) return null
+      return {
+         ...s,
+         title: hasBr ? s.title.replace(/\s*\[.*?\]\s*/g, '').trim() : s.title,
+         title_unicode: hasBrUni ? String(s.title_unicode).replace(/\s*\[.*?\]\s*/g, '').trim() : s.title_unicode ?? null,
+         author_unicode: s.author_unicode ?? null,
+      }
    },
+
+   // remove feat.* from authors
    (s: Song) => {
-      if (s.author.includes('feat')) return { ...s, author: s.author.replace(/\s*feat.*/i, '') }
-      else return null
+      const hasFeat = s.author && /feat/i.test(s.author)
+      const hasFeatUni = !!s.author_unicode && /feat/i.test(String(s.author_unicode))
+      if (!hasFeat && !hasFeatUni) return null
+      return {
+         ...s,
+         author: hasFeat ? s.author.replace(/\s*feat.*/i, '').trim() : s.author,
+         author_unicode: hasFeatUni ? String(s.author_unicode).replace(/\s*feat.*/i, '').trim() : s.author_unicode ?? null,
+         title_unicode: s.title_unicode ?? null,
+      }
    },
+
+   // remove ft.* from authors
    (s: Song) => {
-      if (s.author.includes('ft')) return { ...s, author: s.author.replace(/\s*ft.*/i, '') }
-      else return null
+      const hasFt = s.author && /\bft\b/i.test(s.author)
+      const hasFtUni = !!s.author_unicode && /\bft\b/i.test(String(s.author_unicode))
+      if (!hasFt && !hasFtUni) return null
+      return {
+         ...s,
+         author: hasFt ? s.author.replace(/\s*ft.*/i, '').trim() : s.author,
+         author_unicode: hasFtUni ? String(s.author_unicode).replace(/\s*ft.*/i, '').trim() : s.author_unicode ?? null,
+         title_unicode: s.title_unicode ?? null,
+      }
    },
 ]
 
-export const hardConditions = [(s: Song) => ({ ...s, author: '' }), (s: Song) => ({ ...s, title: '' })]
+export const hardConditions = [
+   (s: Song) => ({ ...s, author: '', author_unicode: null }),
+   (s: Song) => ({ ...s, title: '', title_unicode: null }),
+]
 
 export const always_conditions = [
    (s: Song) => {
-      if (s.title.includes('(TV Size)')) return { ...s, title: s.title.replace('(TV Size)', '').trim() }
-      else return null
+      const hasTv = s.title && s.title.includes('(TV Size)')
+      const hasTvUni = !!s.title_unicode && String(s.title_unicode).includes('(TV Size)')
+      if (!hasTv && !hasTvUni) return null
+      return {
+         ...s,
+         title: hasTv ? s.title.replace('(TV Size)', '').trim() : s.title,
+         title_unicode: hasTvUni ? String(s.title_unicode).replace('(TV Size)', '').trim() : s.title_unicode ?? null,
+         author_unicode: s.author_unicode ?? null,
+      }
    },
 ]
 
@@ -33,5 +80,12 @@ export const applyAlwaysConditions = (song: Song) => {
    for (const condition of always_conditions) {
       song = condition(song) || song
    }
-   return song
+   // Ensure both title/title_unicode and author/author_unicode are normalized strings
+   return {
+      ...song,
+      title: song.title ?? '',
+      author: song.author ?? '',
+      title_unicode: song.title_unicode ?? null,
+      author_unicode: song.author_unicode ?? null,
+   }
 }

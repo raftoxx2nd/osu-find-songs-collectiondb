@@ -22,7 +22,7 @@ export default function CollectionBeatmapList({
           onClick={() => onCreatePlaylist(beatmaps)}
           className="bg-green-600 hover:bg-green-700 border-2 border-green-800 rounded px-4 py-2 text-white font-semibold transition-colors"
         >
-          🎵 Create Spotify Playlist
+          Create Spotify Playlist
         </button>
       </div>
 

@@ -46,21 +46,51 @@ export default function FromOsu() {
    }, [songs, setSongs, router])
    // filter songs by selected collection if any
    const filteredSongs = useMemo(() => {
+      // no collection selected → show all songs
       if (!selectedCollection || !collections) return songs
 
-      // Extract unique beatmapset IDs from collection
+      // Extract unique beatmapset IDs from collection (only positive ids)
       const collectionBeatmapsetIds = new Set(
          selectedCollection.beatmaps
             .map((beatmap) => beatmap.beatmapset_id)
-            .filter((id) => id > 0),
+            .filter((id) => Number.isFinite(id) && id > 0),
       )
 
-      return songs.filter((song) => {
-         // folder name song.id is beatmapset ID (e.g. "123456")
-         const songBeatmapsetId = parseInt(song.id || '0', 10)
-         return collectionBeatmapsetIds.has(songBeatmapsetId)
+      // Try to match the existing `songs` array first — some songs might be
+      // already present with proper ids (e.g. uploaded from disk).
+      const matchedFromSongs = songs.filter((song) => {
+         // Extract first numeric chunk from song.id to be robust against
+         // slightly different formats (eg. "123456_extra").
+         const digits = String(song.id || '').match(/\d+/)?.[0]
+         const songBeatmapsetId = digits ? parseInt(digits, 10) : NaN
+         return Number.isFinite(songBeatmapsetId) && collectionBeatmapsetIds.has(songBeatmapsetId)
       })
+
+      if (matchedFromSongs.length > 0) return matchedFromSongs
+
+      // If nothing matched the existing local songs, synthesize a Song list
+      // directly from the selected collection so selecting a collection
+      // always shows its songs (avoids dependence on `songs` being preloaded)
+      const songsFromCollection = selectedCollection.beatmaps
+         .filter((b) => Number.isFinite(b.beatmapset_id) && b.beatmapset_id > 0)
+         .map((bm) => ({
+            author: (bm.artist_unicode || bm.artist) ?? '',
+            title: (bm.title_unicode || bm.title) ?? '',
+            author_unicode: bm.artist_unicode || null,
+            title_unicode: bm.title_unicode || null,
+            text: `${bm.artist_unicode || bm.artist || ''} - ${bm.title_unicode || bm.title || ''}`,
+            image: '',
+            id: String(bm.beatmapset_id),
+         }))
+
+      return songsFromCollection
    }, [songs, selectedCollection, collections])
+
+      // Debug: log when we select a collection and how many songs are visible
+      useEffect(() => {
+         console.debug('FromOsu: selectedCollection ->', selectedCollection?.name ?? null)
+         console.debug('FromOsu: filteredSongs length ->', filteredSongs.length)
+      }, [selectedCollection, filteredSongs])
 
    const chunkedLocal = useMemo(() => chunkArray(filteredSongs, FO_CHUNK_SIZE), [filteredSongs])
 
@@ -225,7 +255,7 @@ export default function FromOsu() {
                   className={tw('hover:animate-spin hover:duration-2000 cursor-pointer', isSettingsVisible && 'brightness-130')}
                />
                <CreatePlaylistButton
-                  data={combined.flatMap((item) => flatCombinedArray(item)).map((item) => item.spotify)}
+                  data={combined.flatMap((item) => flatCombinedArray(item))}
                   isDisabled={!isLoggedWithSpotify || isLoading}
                   data-tooltip-id={!isLoggedWithSpotify || isLoading ? 'tooltip' : undefined}
                   data-tooltip-content={
