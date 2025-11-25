@@ -44,3 +44,7 @@ app/**/test/*
 TODO.txt
 /.vscode/
 test.js
+
+# osu! database files
+db_input/collection.db
+db_input/osu!.db

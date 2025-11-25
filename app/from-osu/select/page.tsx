@@ -10,11 +10,18 @@ import { getServerToken } from '@/lib/Spotify'
 import Footer from '@/components/Footer'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faCopy, faUpload } from '@fortawesome/free-solid-svg-icons'
+import CollectionUploader from '@/app/from-osu/_components/CollectionUploader'
+import { CollectionData } from '@/types/collection'
 
 // prettier-ignore
 export default function SelectPage() {
-   const { setSongs } = useSongContext()
+   const { setSongs, setCollections } = useSongContext()
    const router = useRouter()
+
+   const handleCollectionsParsed = (data: CollectionData) => {
+      setCollections(data)
+      console.log(`✅ Loaded ${data.collections.length} collections`)
+   }
 
    useEffect(() => {
       if (Cookies.get('showSpotifyEmbeds') === undefined) Cookies.set('showSpotifyEmbeds', 'true')
@@ -97,45 +104,37 @@ export default function SelectPage() {
    return (
       <div className="flex flex-col justify-center items-center min-h-screen text-white">
          <BgImage />
-         <div className="flex flex-col justify-center items-center flex-1 text-nowrap">
+         <div className="flex flex-col justify-center items-center flex-1 text-nowrap max-w-2xl px-4">
             <h1 className="text-4xl tracking-tight font-semibold mb-3">Select your osu! beatmaps folder</h1>
-            <h3 className="text-lg text-white/60">This may take some time</h3>
-            <div className="text-xl flex items-center gap-2">
-               <h2
-                  className="cursor-pointer hover:underline active:text-main-white"
-                  onClick={(e) => {
-                     navigator.clipboard.writeText(e.currentTarget.innerText)
-                     toast.success('Copied to clipboard!')
-                  }}
-               >
-                  %LocalAppData%\osu!\Songs
-               </h2>
-               <FontAwesomeIcon icon={faCopy} />
-            </div>
-            <div className="relative border-2 border-dashed w-full border-main rounded-lg mt-7 p-8 text-center relative hover:brightness-125 transition-all">
-               <div className="text-main pointer-none">
-                  <FontAwesomeIcon icon={faUpload} className="text-5xl mb-3" />
-                  <div className="text-lg font-medium">Click to select folder</div>
-               </div>
-               {/* @ts-expect-error */}
-               <input directory=""
-                  webkitdirectory=""
-                  type="file"
-                  onChange={(e) => {
-                     toast.promise(handleFileChange(e), {
-                        pending: 'Loading beatmaps...',
-                        error: {
-                           render({ data }) {
-                              console.error(data)
-                              return 'Please select a valid osu! beatmaps directory'
+            <h3 className="text-lg text-white/60 mb-8">This may take some time</h3>
+            
+            {/* ADD COLLECTION UPLOADER HERE */}
+            <CollectionUploader onCollectionsParsed={handleCollectionsParsed} />
+            
+            {/* EXISTING FOLDER INPUT */}
+            <div className="text-xl flex items-center gap-2 mt-6">
+               <h2 className="text-white/80">or just point to your</h2>
+               <label className="cursor-pointer px-5 py-2 bg-main border-4 border-main-border rounded-lg font-semibold transition-colors hover:bg-main-dark">
+                  <input
+                     {...({ webkitdirectory: '', directory: '', multiple: true } as any)}
+                     className="hidden"
+                     type="file"
+                     onChange={(e) => {
+                        toast.promise(handleFileChange(e), {
+                           pending: 'Loading beatmaps...',
+                           error: {
+                              render({ data }) {
+                                 console.error(data)
+                                 return 'Please select a valid osu! beatmaps directory'
+                              },
+                              autoClose: false,
+                              hideProgressBar: true,
                            },
-                           autoClose: false,
-                           hideProgressBar: true,
-                        },
-                     })
-                  }}
-                  className="absolute opacity-0 top-0 left-0 w-full h-full"
-               />
+                        })
+                     }}
+                  />
+                  Songs folder
+               </label>
             </div>
          </div>
          <ToastContainer />

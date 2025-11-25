@@ -11,6 +11,8 @@ import { Track } from '@/types/Spotify'
 import { BeatmapSet } from '@/types/Osu'
 import { groupOptions, sortOptions, selectStyles } from '@/utils/selectOptions'
 import { useSongContext } from '@/contexts/SongContext'
+import CollectionSelector from './_components/CollectionSelector'
+import { ParsedCollection, OsuBeatmap } from '@/types/collection'
 import SettingsPopup from '@/components/SettingsPopup'
 import { useRouter } from 'next/navigation'
 import CreatePlaylistButton from './_components/CreatePlaylistButton'
@@ -35,13 +37,30 @@ import { FO_CHUNK_SIZE } from '@/variables'
 
 export default function FromOsu() {
    const router = useRouter()
-   let { songs, setSongs } = useSongContext()
+   const { songs, setSongs, collections } = useSongContext()
+   const [selectedCollection, setSelectedCollection] = useState<ParsedCollection | null>(null)
    useEffect(() => {
       if (!songs.length) {
          router.push('/from-osu/select')
       }
    }, [songs, setSongs, router])
-   const chunkedLocal = chunkArray(songs, FO_CHUNK_SIZE)
+   // filter songs by selected collection if any
+   const filteredSongs = useMemo(() => {
+      if (!selectedCollection || !collections) return songs
+
+      return songs.filter((song) => {
+         return selectedCollection.beatmaps.some((beatmap: OsuBeatmap) => {
+            const songArtist = song.author?.toLowerCase() ?? ''
+            const songTitle = song.title?.toLowerCase() ?? ''
+            const beatmapArtist = (beatmap.artist_unicode || beatmap.artist || '').toLowerCase()
+            const beatmapTitle = (beatmap.title_unicode || beatmap.title || '').toLowerCase()
+
+            return songArtist === beatmapArtist && songTitle === beatmapTitle
+         })
+      })
+   }, [songs, selectedCollection, collections])
+
+   const chunkedLocal = useMemo(() => chunkArray(filteredSongs, FO_CHUNK_SIZE), [filteredSongs])
 
    const [info, setInfo] = useState<CombinedSingleSimple | null>(null)
    const [exactSpotify, setExactSpotify] = useState(false)
@@ -121,7 +140,7 @@ export default function FromOsu() {
          osuQuery: osuQueries[i],
       }))
    }, [
-      songs,
+      filteredSongs,
       osuQueries.filter((q) => q.isLoading).length,
       spotifyQueries.filter((q) => q.isLoading).length,
       osuQueries.map((q) => q.dataUpdatedAt).join(','),
@@ -187,8 +206,8 @@ export default function FromOsu() {
             }
          >
             {msLeftOsu > msLeftSpotify
-               ? `${osuQueries.filter((q) => !q.isLoading).length}/${songs.length} | ${timeLeftOsu} left`
-               : `${spotifyQueries.filter((q) => !q.isLoading).length}/${songs.length} | ${timeLeftSpotify} left`}
+               ? `${osuQueries.filter((q) => !q.isLoading).length}/${filteredSongs.length} | ${timeLeftOsu} left`
+               : `${spotifyQueries.filter((q) => !q.isLoading).length}/${filteredSongs.length} | ${timeLeftSpotify} left`}
          </Progress>
 
          <header className="bg-triangles [--color-dialog:var(--color-main])] border-b-4 border-main-border w-screen h-12 flex justify-between items-center px-4 gap-3">
@@ -242,6 +261,18 @@ export default function FromOsu() {
                <Search value={search} setValue={setSearch} placeholder="Search songs" width={200} disabled={isLoading} />
             </section>
          </header>
+
+         {/* ADD COLLECTION SELECTOR HERE */}
+         {collections && (
+            <div className="px-4 mt-3">
+               <CollectionSelector
+                  collections={collections.collections}
+                  selectedCollection={selectedCollection}
+                  onSelect={setSelectedCollection}
+                  totalSongs={songs.length}
+               />
+            </div>
+         )}
 
          {/* content */}
          <main className="max-h-[calc(100dvh-48px)] flex justify-center sm:justify-end">
