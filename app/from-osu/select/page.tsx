@@ -68,31 +68,51 @@ export default function SelectPage() {
          const osuFile = files.find(f => f.name.endsWith('.osu'))
          if (!osuFile) continue
 
-         // getting file content -> bg filename
+         // parse file content for unicode metadata and background filename
          const content = await readFileAsText(osuFile)
-         const lines = content.split('\n') 
-         let bgFileName: null | string = null
+         const lines = content.split('\n')
 
-         lines.forEach((line, i) => {
-            if (!bgFileName && line.trim().startsWith('//Background and Video events')) {
-               const bgLine = lines[i + 1]
+         let bgFileName: null | string = null
+         let unicodeArtist: string | null = null
+         let unicodeTitle: string | null = null
+
+         for (let i = 0; i < lines.length; i++) {
+            const raw = lines[i] || ''
+            const line = raw.trim()
+
+            if (!bgFileName && line.startsWith('//Background and Video events')) {
+               const bgLine = lines[i + 1] || ''
                const match = bgLine.match(/"(.*?)"/)
                if (match) bgFileName = match[1]
             }
-         })
-         if (!bgFileName) continue
-         
-         // searching bg file
-         const imageFile = files.find(f => f.name === bgFileName)
-         if (!imageFile) continue
-         const image = URL.createObjectURL(imageFile)
+
+            if (line.startsWith('TitleUnicode:')) {
+               unicodeTitle = line.split(':').slice(1).join(':').trim() || null
+            } else if (line.startsWith('ArtistUnicode:')) {
+               unicodeArtist = line.split(':').slice(1).join(':').trim() || null
+            } else if (line.startsWith('Title:') && !unicodeTitle) {
+               // fallback to non-unicode Title
+               unicodeTitle = line.split(':').slice(1).join(':').trim() || null
+            } else if (line.startsWith('Artist:') && !unicodeArtist) {
+               unicodeArtist = line.split(':').slice(1).join(':').trim() || null
+            }
+         }
+
+         // background image is optional — try to find it
+         const imageFile = bgFileName ? files.find((f) => f.name === bgFileName) : files.find((f) => f.name.endsWith('.jpg') || f.name.endsWith('.png'))
+         const image = imageFile ? URL.createObjectURL(imageFile) : ''
 
          const songName = songParts.join(' ').split(' - ')
-         const songKey = `${songName[0]} - ${songName[1]}`
+         const author = unicodeArtist || songName[0]
+         const title = unicodeTitle || songName[1]
+
          songs.push({
-            author: songName[0],
-            title: songName[1],
-            text: songKey,
+            author,
+            title,
+            // preserve raw unicode values (if present)
+            author_unicode: unicodeArtist || null,
+            title_unicode: unicodeTitle || null,
+            text: `${author} - ${title}`,
             image,
             id,
          })
@@ -137,8 +157,8 @@ export default function SelectPage() {
                </label>
             </div>
          </div>
-         <ToastContainer />
-         <Footer />
-      </div>
-   )
-}
+            <ToastContainer />
+            <Footer />
+         </div>
+      )
+   }

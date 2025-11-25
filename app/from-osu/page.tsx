@@ -48,15 +48,17 @@ export default function FromOsu() {
    const filteredSongs = useMemo(() => {
       if (!selectedCollection || !collections) return songs
 
-      return songs.filter((song) => {
-         return selectedCollection.beatmaps.some((beatmap: OsuBeatmap) => {
-            const songArtist = song.author?.toLowerCase() ?? ''
-            const songTitle = song.title?.toLowerCase() ?? ''
-            const beatmapArtist = (beatmap.artist_unicode || beatmap.artist || '').toLowerCase()
-            const beatmapTitle = (beatmap.title_unicode || beatmap.title || '').toLowerCase()
+      // Extract unique beatmapset IDs from collection
+      const collectionBeatmapsetIds = new Set(
+         selectedCollection.beatmaps
+            .map((beatmap) => beatmap.beatmapset_id)
+            .filter((id) => id > 0),
+      )
 
-            return songArtist === beatmapArtist && songTitle === beatmapTitle
-         })
+      return songs.filter((song) => {
+         // folder name song.id is beatmapset ID (e.g. "123456")
+         const songBeatmapsetId = parseInt(song.id || '0', 10)
+         return collectionBeatmapsetIds.has(songBeatmapsetId)
       })
    }, [songs, selectedCollection, collections])
 

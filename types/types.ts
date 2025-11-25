@@ -5,6 +5,9 @@ import { UseQueryResult } from '@tanstack/react-query'
 export type Song = {
    title: string
    author: string
+   // optional unicode metadata parsed from .osu files
+   title_unicode?: string | null
+   author_unicode?: string | null
    text: string
    id: string
    image: string
