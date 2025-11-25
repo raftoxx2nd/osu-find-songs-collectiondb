@@ -61,15 +61,20 @@ export default function SelectPage() {
       for (const [folderName, files] of folders) {
          const songParts = folderName.split(' ')
 
-         // check if folder is map folder
-         const id = songParts.length > 0 && !isNaN(parseInt(songParts[0])) ? songParts.shift() : null
-         if (!id) continue
+         // determine beatmapset id: try folder prefix, but prefer the BeatmapSetID in the .osu file if available
+         let id: string | null = null
+         if (songParts.length > 0 && !isNaN(parseInt(songParts[0] || ''))) id = songParts.shift() ?? null
 
          const osuFile = files.find(f => f.name.endsWith('.osu'))
          if (!osuFile) continue
 
          // parse file content for unicode metadata and background filename
          const content = await readFileAsText(osuFile)
+         // try to extract a BeatmapSetID from the .osu file content (more reliable than folder name)
+         const setIdMatch = content.match(/BeatmapSetID\s*:?\s*(\d+)/i)
+         if (setIdMatch && setIdMatch[1]) {
+            id = setIdMatch[1]
+         }
          const lines = content.split('\n')
 
          let bgFileName: null | string = null
@@ -106,7 +111,7 @@ export default function SelectPage() {
          const author = unicodeArtist || songName[0]
          const title = unicodeTitle || songName[1]
 
-         songs.push({
+             songs.push({
             author,
             title,
             // preserve raw unicode values (if present)
@@ -114,7 +119,7 @@ export default function SelectPage() {
             title_unicode: unicodeTitle || null,
             text: `${author} - ${title}`,
             image,
-            id,
+            id: String(id ?? ''),
          })
       }
       setSongs(songs)

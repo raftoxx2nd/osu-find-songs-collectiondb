@@ -1,6 +1,8 @@
 // app/from-osu/_components/CollectionSelector.tsx
-'use client'
+"use client"
 import { ParsedCollection } from '@/types/collection'
+import { useSongContext } from '@/contexts/SongContext'
+import { Song } from '@/types/types'
 
 interface CollectionSelectorProps {
   collections: ParsedCollection[]
@@ -15,6 +17,7 @@ export default function CollectionSelector({
   onSelect,
   totalSongs
 }: CollectionSelectorProps) {
+  const { songs, setSongs } = useSongContext()
   if (collections.length === 0) return null
 
   return (
@@ -43,7 +46,25 @@ export default function CollectionSelector({
         {collections.map((collection) => (
           <button
             key={collection.name}
-            onClick={() => onSelect(collection)}
+            onClick={() => {
+              onSelect(collection)
+
+              // if no songs were loaded from disk, populate the song list from
+              // the selected collection (use unicode fields if possible)
+              if (!songs || songs.length === 0) {
+                const songsFromCollection: Song[] = (collection.beatmaps || []).map((bm) => ({
+                  author: (bm.artist_unicode || bm.artist) ?? '',
+                  title: (bm.title_unicode || bm.title) ?? '',
+                  author_unicode: bm.artist_unicode || null,
+                  title_unicode: bm.title_unicode || null,
+                  text: `${bm.artist_unicode || bm.artist || ''} - ${bm.title_unicode || bm.title || ''}`,
+                  image: '',
+                  id: String(bm.beatmapset_id || ''),
+                }))
+
+                setSongs(songsFromCollection)
+              }
+            }}
             className={`px-4 py-2 rounded-lg border-2 whitespace-nowrap transition-all ${
               selectedCollection?.name === collection.name
                 ? 'bg-main border-main-border text-white shadow-lg scale-105'
