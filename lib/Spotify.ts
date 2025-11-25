@@ -55,14 +55,19 @@ export const searchSongWithConditions = async (song: Song): Promise<[TrackFull] 
       if (!conditionSearch) continue
       else modifiedSong = conditionSearch
 
-      const result = await findSong(`artist:${modifiedSong.author} track:${modifiedSong.title}`)
+      // prefer unicode fields when available (author_unicode / title_unicode)
+      const artistQuery = (modifiedSong as any).author_unicode || modifiedSong.author
+      const titleQuery = (modifiedSong as any).title_unicode || modifiedSong.title
+      const result = await findSong(`artist:${artistQuery} track:${titleQuery}`)
       if (result.tracks.items.length) return result.tracks.items
    }
 
    for (const condition of hardConditions) {
       const hardSearch = condition(modifiedSong)
 
-      const result = await findSong(`${hardSearch.author} - ${hardSearch.title}`)
+      const hardArtist = (hardSearch as any).author_unicode || hardSearch.author
+      const hardTitle = (hardSearch as any).title_unicode || hardSearch.title
+      const result = await findSong(`${hardArtist} - ${hardTitle}`)
       if (result.tracks.items.length) return result.tracks.items
       console.warn(`Song not found after HARD: ${hardSearch.author} - ${hardSearch.title}`)
    }
