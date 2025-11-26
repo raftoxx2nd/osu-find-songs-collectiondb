@@ -1,12 +1,13 @@
 'use client'
-import { Song } from '@/types/types'
+import { LocalBeatmap } from '@/types/types'
 import { createContext, useContext, useMemo, useState } from 'react'
 import { useEffect } from 'react'
 import { CollectionData } from '@/types/collection'
 
 type SongsContextType = {
-   songs: Song[]
-   setSongs: React.Dispatch<React.SetStateAction<Song[]>>
+   // canonical all-songs list produced by parser: LocalBeatmap[]
+   songs: LocalBeatmap[]
+   setSongs: React.Dispatch<React.SetStateAction<LocalBeatmap[]>>
    collections: CollectionData | null  // ADD THIS
    setCollections: React.Dispatch<React.SetStateAction<CollectionData | null>>
 }
@@ -14,7 +15,7 @@ type SongsContextType = {
 const SongsContext = createContext<SongsContextType | null>(null)
 
 export function SongContextProvider({ children }: { children: React.ReactNode }) {
-   const [songs, setSongs] = useState<Song[]>([])
+   const [songs, setSongs] = useState<LocalBeatmap[]>([])
    const [collections, setCollections] = useState<CollectionData | null>(null)
 
    // Stabilize the provider value so consumers don't receive a new object ref every render

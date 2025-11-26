@@ -1,11 +1,11 @@
 // app/from-osu/_components/CollectionBeatmapList.tsx
 'use client'
-import { OsuBeatmap } from '@/types/collection'
+import { LocalBeatmap } from '@/types/types'
 import Image from 'next/image'
 
 interface CollectionBeatmapListProps {
-  beatmaps: OsuBeatmap[]
-  onCreatePlaylist: (beatmaps: OsuBeatmap[]) => void
+  beatmaps: LocalBeatmap[]
+  onCreatePlaylist: (beatmaps: LocalBeatmap[]) => void
 }
 
 export default function CollectionBeatmapList({ 
@@ -42,7 +42,7 @@ export default function CollectionBeatmapList({
                 </p>
               </div>
               <div className="text-white/40 text-xs">
-                {Math.floor(beatmap.total_length / 60)}:{(beatmap.total_length % 60).toString().padStart(2, '0')}
+                {Math.floor((beatmap.total_length ?? 0) / 60)}:{((beatmap.total_length ?? 0) % 60).toString().padStart(2, '0')}
               </div>
             </div>
           </div>

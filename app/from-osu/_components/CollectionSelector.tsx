@@ -31,7 +31,7 @@ export default function CollectionSelector({
         </span>
       </div>
       
-      <div className="flex gap-2 overflow-x-auto py-2 scrollbar-thin scrollbar-thumb-main-border scrollbar-track-transparent">
+      <div className="flex gap-2 overflow-x-auto flex-nowrap py-2 scrollbar-thin scrollbar-thumb-main-border scrollbar-track-transparent">
         <button
           onClick={() => onSelect(null)}
           className={`px-4 py-2 rounded-lg border-2 whitespace-nowrap transition-all ${
