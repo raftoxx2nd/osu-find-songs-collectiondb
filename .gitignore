@@ -48,3 +48,9 @@ test.js
 # osu! database files
 db_input/collection.db
 db_input/osu!.db
+
+# GitHub plans
+.github/fix-plan.md
+.github/optimize-search.md
+.github/refactor-plan.md
+.github/refactor-plan2.md
