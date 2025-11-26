@@ -1,91 +1,60 @@
-import { Song } from '@/types/types'
+import { LocalBeatmap as Song } from '@/types/types'
 
-export const conditions = [
-   // identity — return same song (applies normalization in applyAlwaysConditions already)
-   (s: Song) => ({ ...s, title_unicode: s.title_unicode ?? null, author_unicode: s.author_unicode ?? null }),
+/**
+ * Clean input strings for matching/search.
+ * Removes common noise like (TV Size), [Difficulty], feat/ft suffixes and normalizes whitespace.
+ */
+export function cleanString(input: string | null | undefined): string {
+   if (!input) return ''
+   return String(input)
+      .replace(/\(TV Size\)/gi, '')
+      .replace(/\(Short Ver\.\)/gi, '')
+      .replace(/\[.*?\]/g, '')
+      .replace(/\s*feat\.?\s.*$/i, '')
+      .replace(/\s*ft\.?\s.*$/i, '')
+      .trim()
+      .replace(/\s+/g, ' ')
+}
 
-   // strip parentheses from titles (both title and title_unicode when present)
-   (s: Song) => {
-      const hasParen = (s.title && s.title.includes('(') && s.title.includes(')'))
-      const hasParenUni = !!s.title_unicode && String(s.title_unicode).includes('(') && String(s.title_unicode).includes(')')
-      if (!hasParen && !hasParenUni) return null
-      return {
-         ...s,
-         title: hasParen ? s.title.replace(/\s*\(.*?\)\s*/g, '').trim() : s.title,
-         title_unicode: hasParenUni ? String(s.title_unicode).replace(/\s*\(.*?\)\s*/g, '').trim() : s.title_unicode ?? null,
-         author_unicode: s.author_unicode ?? null,
-      }
-   },
+/**
+ * Normalize a Song object for searching — keep both author/artist in sync
+ */
+export function normalizeSongForSearch(song: Song): Song {
+   const title_unicode = song.title_unicode ?? song.title ?? null
+   const title = song.title ?? (song.title_unicode ?? '')
+   const artist_unicode = song.artist_unicode ?? song.author_unicode ?? null
+   const artist = song.artist ?? song.author ?? ''
 
-   // strip square brackets from titles
-   (s: Song) => {
-      const hasBr = (s.title && s.title.includes('[') && s.title.includes(']'))
-      const hasBrUni = !!s.title_unicode && String(s.title_unicode).includes('[') && String(s.title_unicode).includes(']')
-      if (!hasBr && !hasBrUni) return null
-      return {
-         ...s,
-         title: hasBr ? s.title.replace(/\s*\[.*?\]\s*/g, '').trim() : s.title,
-         title_unicode: hasBrUni ? String(s.title_unicode).replace(/\s*\[.*?\]\s*/g, '').trim() : s.title_unicode ?? null,
-         author_unicode: s.author_unicode ?? null,
-      }
-   },
-
-   // remove feat.* from authors
-   (s: Song) => {
-      const hasFeat = s.author && /feat/i.test(s.author)
-      const hasFeatUni = !!s.author_unicode && /feat/i.test(String(s.author_unicode))
-      if (!hasFeat && !hasFeatUni) return null
-      return {
-         ...s,
-         author: hasFeat ? s.author.replace(/\s*feat.*/i, '').trim() : s.author,
-         author_unicode: hasFeatUni ? String(s.author_unicode).replace(/\s*feat.*/i, '').trim() : s.author_unicode ?? null,
-         title_unicode: s.title_unicode ?? null,
-      }
-   },
-
-   // remove ft.* from authors
-   (s: Song) => {
-      const hasFt = s.author && /\bft\b/i.test(s.author)
-      const hasFtUni = !!s.author_unicode && /\bft\b/i.test(String(s.author_unicode))
-      if (!hasFt && !hasFtUni) return null
-      return {
-         ...s,
-         author: hasFt ? s.author.replace(/\s*ft.*/i, '').trim() : s.author,
-         author_unicode: hasFtUni ? String(s.author_unicode).replace(/\s*ft.*/i, '').trim() : s.author_unicode ?? null,
-         title_unicode: s.title_unicode ?? null,
-      }
-   },
-]
-
-export const hardConditions = [
-   (s: Song) => ({ ...s, author: '', author_unicode: null }),
-   (s: Song) => ({ ...s, title: '', title_unicode: null }),
-]
-
-export const always_conditions = [
-   (s: Song) => {
-      const hasTv = s.title && s.title.includes('(TV Size)')
-      const hasTvUni = !!s.title_unicode && String(s.title_unicode).includes('(TV Size)')
-      if (!hasTv && !hasTvUni) return null
-      return {
-         ...s,
-         title: hasTv ? s.title.replace('(TV Size)', '').trim() : s.title,
-         title_unicode: hasTvUni ? String(s.title_unicode).replace('(TV Size)', '').trim() : s.title_unicode ?? null,
-         author_unicode: s.author_unicode ?? null,
-      }
-   },
-]
-
-export const applyAlwaysConditions = (song: Song) => {
-   for (const condition of always_conditions) {
-      song = condition(song) || song
-   }
-   // Ensure both title/title_unicode and author/author_unicode are normalized strings
    return {
       ...song,
-      title: song.title ?? '',
-      author: song.author ?? '',
-      title_unicode: song.title_unicode ?? null,
-      author_unicode: song.author_unicode ?? null,
+      title: cleanString(title),
+      title_unicode: title_unicode ? cleanString(title_unicode) : null,
+      artist: cleanString(artist),
+      artist_unicode: artist_unicode ? cleanString(artist_unicode) : null,
+      author: song.author ?? artist,
+      author_unicode: song.author_unicode ?? artist_unicode ?? null,
    }
 }
+
+/**
+ * Build a single optimized Spotify search query.
+ * Prioritize unicode fields when available, fallback to plain fields.
+ */
+export function getOptimizedSearchQuery(song: Song): string | null {
+   const normalized = normalizeSongForSearch(song)
+   const rawArtist = normalized.artist_unicode || normalized.artist || normalized.author_unicode || normalized.author
+   const rawTitle = normalized.title_unicode || normalized.title
+
+   if (!rawArtist || !rawTitle) return null
+
+   const artist = cleanString(rawArtist)
+   const title = cleanString(rawTitle)
+
+   if (!artist || !title) return null
+
+   // Use Spotify field filters for precise matching — artist + track
+   return `artist:${artist} track:${title}`
+}
+
+// Keep old name for compatibility
+export const applyAlwaysConditions = normalizeSongForSearch

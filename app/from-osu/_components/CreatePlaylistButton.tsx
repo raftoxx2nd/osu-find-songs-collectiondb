@@ -1,10 +1,12 @@
 'use client'
 import { Track } from '@/types/Spotify'
+import { LocalBeatmap } from '@/types/types'
 import { CombinedSingleSimple } from '@/types/types'
 import { AddItemsToPlaylist, createPlaylist, fetchMyProfile, fetchSpotify, getServerToken } from '@/lib/Spotify'
 import { useMutation } from '@tanstack/react-query'
 import React, { useState } from 'react'
 import Modal from '@/components/Modal'
+import { useBulkMatcher } from '@/hooks/useBulkMatcher'
 import { Button } from '@/components/buttons/Buttons'
 import Cookies from 'js-cookie'
 import { useRouter } from 'next/navigation'
@@ -43,6 +45,8 @@ export default function CreatePlaylistButton({ data, className, isDisabled, ...p
       setOnOkayText(onOkayText)
    }
 
+   const { matchAll, progress, isMatching } = useBulkMatcher()
+
    async function handleCreatePlaylist() {
       setIsModalOpen(true)
       if (!Cookies.get('spotify_oauth_access_token')) {
@@ -75,9 +79,37 @@ export default function CreatePlaylistButton({ data, className, isDisabled, ...p
 
          handleModal(<h1 className="animate-pulse font-semibold">Putting tracks in your playlist...</h1>, 'loading')
 
-         // Ranking heuristic: choose the best track for each search result.
          // data entries are CombinedSingleSimple which include .local and .spotify (Track[] | null)
          const entries = data.filter(Boolean) as CombinedSingleSimple[]
+
+         // Before generating playlist, ensure we have Spotify data for all entries
+         const missingIdx: number[] = []
+         const missingLocals: LocalBeatmap[] = []
+         entries.forEach((entry, idx) => {
+            if (!entry.spotify || entry.spotify.length === 0) {
+               missingIdx.push(idx)
+               missingLocals.push(entry.local)
+            }
+         })
+
+         if (missingLocals.length > 0) {
+            handleModal(
+               <div className="text-center">
+                  <h1 className="animate-pulse font-semibold">Matching songs on Spotify...</h1>
+                  <p className="text-sm text-white/60 mt-2">{progress}%</p>
+               </div>,
+               'loading',
+            )
+            const matchedResults = await matchAll(missingLocals)
+            // Merge matched results back into entries
+            matchedResults.forEach((res, i) => {
+               const entryIdx = missingIdx[i]
+               if (entryIdx !== undefined) entries[entryIdx].spotify = res || entries[entryIdx].spotify || null
+            })
+         }
+
+         // Ranking heuristic: choose the best track for each search result.
+         // data entries are CombinedSingleSimple which include .local and .spotify (Track[] | null)
 
          function normalize(s: string | null | undefined) {
             if (!s) return ''

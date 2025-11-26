@@ -12,15 +12,34 @@ export async function POST(req: Request) {
          status: 400,
       })
 
-   // TODO implement reject reason handle
-   const promises = await Promise.allSettled(songs.map((song) => searchSongWithConditions(song))) //? returns { status: 'fulfilled' | 'rejected', value?: T, reason?: any }
+   // Deduplicate songs to avoid redundant searches (prefers `hash`, falls back to `id`)
+   const keyFor = (s: Song) => (s.hash ? s.hash : String(s.id))
+   const uniqueByKey = new Map<string, Song>()
+   const keys: string[] = []
+   for (const s of songs) {
+      const k = keyFor(s)
+      if (!uniqueByKey.has(k)) {
+         uniqueByKey.set(k, s)
+         keys.push(k)
+      }
+   }
+
+   const uniqueSongs = keys.map((k) => uniqueByKey.get(k)!)
+
+   const promises = await Promise.allSettled(uniqueSongs.map((song) => searchSongWithConditions(song))) //? returns { status: 'fulfilled' | 'rejected', value?: T, reason?: any }
    const results = promises.map((r) =>
       r.status === 'fulfilled' && r.value !== null && r.value !== undefined && Array.isArray(r.value) && r.value.length > 0
          ? r.value
          : null,
    )
 
-   const simplified: (Track[] | undefined)[] = results.map((batch) =>
+   const resultByKey = new Map<string, (Track[] | null)>()
+   results.forEach((res, idx) => resultByKey.set(keys[idx], res as any))
+
+   // Map back to original order (for duplicate entries, return same result reference)
+   const mappedResults = songs.map((s) => resultByKey.get(keyFor(s)) ?? null)
+
+   const simplified: (Track[] | undefined)[] = mappedResults.map((batch) =>
       batch?.map((item: Track) => ({
          album: {
             album_type: item.album.album_type,

@@ -83,7 +83,7 @@ export default function Info({ data, onClose, className }: Props) {
          <div className="flex gap-4 h-[120px]">
             <div className="min-w-[120px] max-w-[120px] h-[120px]">
                <Image
-                  src={local.image}
+                  src={local.image ?? '/icon.png'}
                   width={0}
                   height={0}
                   sizes="100vw"

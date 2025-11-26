@@ -12,7 +12,7 @@ import { BeatmapSet } from '@/types/Osu'
 import { groupOptions, sortOptions, selectStyles } from '@/utils/selectOptions'
 import { useSongContext } from '@/contexts/SongContext'
 import CollectionSelector from './_components/CollectionSelector'
-import { ParsedCollection, OsuBeatmap } from '@/types/collection'
+import { ParsedCollection } from '@/types/collection'
 import SettingsPopup from '@/components/SettingsPopup'
 import { useRouter } from 'next/navigation'
 import CreatePlaylistButton from './_components/CreatePlaylistButton'
@@ -52,7 +52,7 @@ export default function FromOsu() {
       // Extract unique beatmapset IDs from collection (only positive ids)
       const collectionBeatmapsetIds = new Set(
          selectedCollection.beatmaps
-            .map((beatmap) => beatmap.beatmapset_id)
+            .map((beatmap) => beatmap.beatmapset_id ?? beatmap.beatmap_id ?? NaN)
             .filter((id) => Number.isFinite(id) && id > 0),
       )
 
@@ -72,7 +72,10 @@ export default function FromOsu() {
       // directly from the selected collection so selecting a collection
       // always shows its songs (avoids dependence on `songs` being preloaded)
       const songsFromCollection = selectedCollection.beatmaps
-         .filter((b) => Number.isFinite(b.beatmapset_id) && b.beatmapset_id > 0)
+         .filter((b) => {
+            const id = b.beatmapset_id ?? b.beatmap_id ?? 0
+            return Number.isFinite(id) && id > 0
+         })
          .map((bm) => ({
             author: (bm.artist_unicode || bm.artist) ?? '',
             title: (bm.title_unicode || bm.title) ?? '',
@@ -80,19 +83,38 @@ export default function FromOsu() {
             title_unicode: bm.title_unicode || null,
             text: `${bm.artist_unicode || bm.artist || ''} - ${bm.title_unicode || bm.title || ''}`,
             image: '',
-            id: String(bm.beatmapset_id),
+            id: String(bm.beatmapset_id ?? bm.beatmap_id ?? ''),
          }))
 
       return songsFromCollection
    }, [songs, selectedCollection, collections])
 
       // Debug: log when we select a collection and how many songs are visible
+   
+
+   // Visible range for Virtuoso-driven lazy queries
+   const [visibleRange, setVisibleRange] = useState({ startIndex: 0, endIndex: FO_CHUNK_SIZE * 4 })
+   const [search, setSearch] = useState('')
+   // search state is declared above to be used in processedSongs memo
+   
+
+   // post-filtering: for search and any additional filtering
+   const processedSongs = useMemo(() => {
+      let result = filteredSongs
+      if (search && search.trim().length > 0) {
+         const str = search.toLowerCase()
+         result = result.filter((s) => (s.title || '').toLowerCase().includes(str) || (s.author || '').toLowerCase().includes(str))
+      }
+      return result
+   }, [filteredSongs, search])
+
+   const chunkedLocal = useMemo(() => chunkArray(processedSongs, FO_CHUNK_SIZE), [processedSongs])
+
+      // Debug: log when we select a collection and how many songs are visible
       useEffect(() => {
          console.debug('FromOsu: selectedCollection ->', selectedCollection?.name ?? null)
-         console.debug('FromOsu: filteredSongs length ->', filteredSongs.length)
-      }, [selectedCollection, filteredSongs])
-
-   const chunkedLocal = useMemo(() => chunkArray(filteredSongs, FO_CHUNK_SIZE), [filteredSongs])
+         console.debug('FromOsu: processedSongs length ->', processedSongs.length)
+      }, [selectedCollection, processedSongs])
 
    const [info, setInfo] = useState<CombinedSingleSimple | null>(null)
    const [exactSpotify, setExactSpotify] = useState(false)
@@ -102,7 +124,6 @@ export default function FromOsu() {
    const [groupedDict, setGroupedDict] = useState<Record<string, CombinedSingleSimple[]>>({ '': [] })
    const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
-   const [search, setSearch] = useState('')
 
    const isLoggedWithSpotify = useMemo(() => {
       return Cookies.get('spotify_oauth_access_token') !== undefined
@@ -113,21 +134,26 @@ export default function FromOsu() {
    }, [exactSpotify, groupFn, sortFn])
 
    // queries
+   const startChunk = Math.floor(visibleRange.startIndex / FO_CHUNK_SIZE)
+   const endChunk = Math.ceil(visibleRange.endIndex / FO_CHUNK_SIZE)
+   const BUFFER_CHUNKS = 2
+
    const spotifyQueries = useQueries({
-      queries: chunkedLocal.map((localChunk) => ({
-         queryKey: ['spotifyChunk', localChunk.map((s) => s.id)],
+      queries: chunkedLocal.map((localChunk, index) => ({
+         queryKey: ['spotifyChunk', localChunk.map((s) => s.id).join(',')],
          queryFn: async () => {
             const t0 = performance.now()
             const res = await axios.post<(null | Track[])[]>('/api/batch/spotify', localChunk)
             addTimeSpotify(performance.now() - t0)
             return res.data
          },
+         enabled: index >= Math.max(0, startChunk - BUFFER_CHUNKS) && index <= endChunk + BUFFER_CHUNKS,
       })),
    })
 
    const osuQueries = useQueries({
-      queries: chunkedLocal.map((localChunk) => ({
-         queryKey: ['osuChunk', localChunk.map((s) => s.id)],
+      queries: chunkedLocal.map((localChunk, index) => ({
+         queryKey: ['osuChunk', localChunk.map((s) => s.id).join(',')],
          queryFn: async () => {
             const t0 = performance.now()
             const res = await axios.get<BeatmapSet[] | null>(`/api/batch/osu`, {
@@ -139,6 +165,7 @@ export default function FromOsu() {
             addTimeOsu(performance.now() - t0)
             return res.data
          },
+         enabled: index >= Math.max(0, startChunk - BUFFER_CHUNKS) && index <= endChunk + BUFFER_CHUNKS,
       })),
    })
 
@@ -172,7 +199,7 @@ export default function FromOsu() {
          osuQuery: osuQueries[i],
       }))
    }, [
-      filteredSongs,
+      chunkedLocal,
       osuQueries.filter((q) => q.isLoading).length,
       spotifyQueries.filter((q) => q.isLoading).length,
       osuQueries.map((q) => q.dataUpdatedAt).join(','),
@@ -226,7 +253,7 @@ export default function FromOsu() {
    }, [groupedDict, selectedGroup, exactSpotify, search])
 
    return (
-      <div className="overflow-hidden">
+      <div className="overflow-x-visible overflow-y-hidden">
          <DynamicBg src={info?.local.image} />
          <Progress
             isVisible={isLoading}
@@ -238,8 +265,8 @@ export default function FromOsu() {
             }
          >
             {msLeftOsu > msLeftSpotify
-               ? `${osuQueries.filter((q) => !q.isLoading).length}/${filteredSongs.length} | ${timeLeftOsu} left`
-               : `${spotifyQueries.filter((q) => !q.isLoading).length}/${filteredSongs.length} | ${timeLeftSpotify} left`}
+               ? `${osuQueries.filter((q) => !q.isLoading).length}/${processedSongs.length} | ${timeLeftOsu} left`
+               : `${spotifyQueries.filter((q) => !q.isLoading).length}/${processedSongs.length} | ${timeLeftSpotify} left`}
          </Progress>
 
          <header className="bg-triangles [--color-dialog:var(--color-main])] border-b-4 border-main-border w-screen h-12 flex justify-between items-center px-4 gap-3">
@@ -265,7 +292,7 @@ export default function FromOsu() {
                   }
                />
             </section>
-            <SettingsPopup className={!isSettingsVisible ? '-left-full' : ''} />
+            <SettingsPopup isOpen={isSettingsVisible} onClose={() => setIsSettingsVisible(false)} />
             <section className="flex gap-2">
                <Toggle
                   value={exactSpotify}
@@ -342,7 +369,8 @@ export default function FromOsu() {
                className="scrollbar w-full"
                style={{ height: 'calc(100dvh - 48px)' }}
                overscan={300}
-               defaultItemHeight={85}
+                  defaultItemHeight={85}
+                  rangeChanged={({ startIndex, endIndex }) => setVisibleRange({ startIndex, endIndex })}
             />
          </main>
 

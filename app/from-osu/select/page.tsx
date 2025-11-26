@@ -20,6 +20,11 @@ export default function SelectPage() {
 
    const handleCollectionsParsed = (data: CollectionData) => {
       setCollections(data)
+      // use deduplicated allSongs output from parser when available
+      if (data.allSongs && data.allSongs.length > 0) {
+         setSongs(data.allSongs)
+         router.push('/from-osu')
+      }
       console.log(`✅ Loaded ${data.collections.length} collections`)
    }
 
